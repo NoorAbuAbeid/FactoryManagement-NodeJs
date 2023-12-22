@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="shortcut icon" href="#" />
+
+    <title>Home Page</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+      }
+
+      h1 {
+        text-align: center;
+      }
+
+      ul {
+        list-style-type: none;
+        padding: 0;
+      }
+
+      li {
+        margin-bottom: 10px;
+      }
+
+      a {
+        display: block;
+        padding: 8px 16px;
+        background-color: #b0e0e6;
+        color: #ffffff;
+        border-radius: 4px;
+        text-decoration: none;
+      }
+
+      #logout {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        background-color: #6495ed;
+        color: #ffffff;
+        font-size: 16px;
+        cursor: pointer;
+
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+      }
+    </style>
+  </head>
+
+  <body onload="getProducts()">
+    <h1>Home</h1>
+    <div id="full-name"></div>
+    <ul>
+      <li><a href="EmployeesPage.html">Employees</a></li>
+      <!--<li><a href="EditEmployeePage.html">Edit Employee</a></li>-->
+      <li><a href="NewDepatmentPage.html">New Department</a></li>
+      <li><a href="NewEmployeePage.html">New Employee</a></li>
+      <li><a href="DepartmentPage.html">Departments</a></li>
+      <!--<li><a href="EditDepartmentPage.html">Edit Department</a></li>-->
+      <li><a href="NewDepatmentPage.html">New Department</a></li>
+      <li><a href="ShiftsPage.html">Shifts</a></li>
+      <li><a href="UsersPage.html">Users</a></li>
+    </ul>
+    <button id="logout">Logout</button>
+    <script>
+      const url = "http://localhost:8000/homePage";
+      const getProducts = async () => {
+        const accessToken = sessionStorage["accessToken"]; //get from session storage
+        console.log("accessToken:", accessToken);
+        if (!accessToken) {
+          console.log("Access token not found");
+          return;
+        }
+        //get because we don't send something in body
+        const resp = await fetch(url, {
+          method: "get",
+          headers: { "x-access-token": accessToken },
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+        } else {
+          console.log("Failed to fetch data:", resp.status);
+        }
+      };
+    </script>
+    <script src="../Server/Handlers/nameHandler.js"></script>
+    <script src="../Server/Handlers/logoutHandler.js"></script>
+  </body>
+</html>

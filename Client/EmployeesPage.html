@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="shortcut icon" href="#" />
+
+    <title>Employees Page</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        background-color: #b0e0e6;
+      }
+
+      table {
+        border-collapse: collapse;
+        width: 50%;
+      }
+
+      th,
+      td {
+        text-align: left;
+        padding: 8px;
+        border: 1px solid #000;
+      }
+
+      th {
+        background-color: #f2f2f2;
+      }
+
+      tr:nth-child(even) {
+        background-color: #f9f9f9;
+      }
+
+      .h2 {
+        margin-top: 30px;
+        margin-bottom: 20px;
+        font-size: 24px;
+      }
+
+      .DepartmentsDropDown {
+        margin-bottom: 20px;
+      }
+
+      button {
+        margin-top: 30px;
+        background-color: #6495ed;
+        color: #ffffff;
+        cursor: pointer;
+        width: 13%;
+        height: 40px;
+        border-radius: 15px;
+        border: 1px solid;
+        font-size: 16px;
+      }
+
+      #logout {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        width: 10%;
+      }
+    </style>
+  </head>
+
+  <body onload="getEmployeeData();getDeprtments();">
+    <h1>Employees Page</h1>
+    <div id="full-name"></div>
+
+    <div class="DepartmentsDropDown">
+      <label for="departmentFilter">Filter by Department:</label>
+      <select id="departmentFilter">
+        <option value="">All Departments</option>
+      </select>
+    </div>
+
+    <table>
+      <tr>
+        <th>Full Name</th>
+        <th>Department</th>
+        <th>Shifts</th>
+      </tr>
+      <tbody id="tBody"></tbody>
+    </table>
+
+    <button onclick="location.href='NewEmployeePage.html'">New Employee</button>
+    <button id="logout">Logout</button>
+    <script src="../Server/Handlers/nameHandler.js"></script>
+    <script src="../Server/Handlers/logoutHandler.js"></script>
+    <script src="../Server/Handlers/authHandler.js"></script>
+
+    <script>
+      const depUrl = "http://localhost:8000/Department";
+
+      async function getEmployeeData() {
+        const accessToken = checkAccessToken(); // Check for access token
+        if (!accessToken) {
+          // No access token, the authHandler handles redirection
+          return;
+        }
+        console.log("accessToken:", accessToken);
+        const employeeUrl = "http://localhost:8000/Employee";
+        const shiftUtl = "http://localhost:8000/Shift";
+
+        try {
+          const [employeesResp, departmentsResp, shiftsResp] =
+            await Promise.all([
+              fetch(employeeUrl),
+              fetch(depUrl),
+              fetch(shiftUtl), // Fetch all shifts for all employees
+            ]);
+
+          if (!employeesResp.ok || !departmentsResp.ok || !shiftsResp.ok) {
+            throw new Error("Failed to fetch data");
+          }
+
+          const employees = await employeesResp.json();
+          const departments = await departmentsResp.json();
+          const allShifts = await shiftsResp.json();
+
+          if (!employees.length) alert("There are no employess!!");
+          else {
+            const tBody = document.getElementById("tBody");
+
+            employees.forEach((employee) => {
+              const tr = document.createElement("tr");
+              tr.setAttribute("data-department-id", employee.Department);
+
+              // 'Employee Name' column
+              const tdName = document.createElement("td");
+              const empLink = document.createElement("a");
+              empLink.href = "#";
+              empLink.textContent =
+                employee.FirstName + " " + employee.LastName;
+              empLink.onclick = () => editEmployee(employee._id);
+              tdName.appendChild(empLink);
+
+              // 'Department' column
+              const tdDepartment = document.createElement("td");
+              const department = departments.find(
+                (dep) => dep._id === employee.Department
+              );
+              if (department) {
+                const depLink = document.createElement("a");
+                depLink.href = "#";
+                depLink.textContent = department.Name;
+                depLink.onclick = () => editDepartment(department._id);
+                tdDepartment.appendChild(depLink);
+              } else {
+                tdDepartment.textContent = "There is no Department!!";
+              }
+
+              // 'Shifts' column
+              const tdShifts = document.createElement("td");
+              const employeeShifts = allShifts.filter((shift) =>
+                shift.employee.includes(employee._id)
+              );
+              if (employeeShifts.length > 0) {
+                tdShifts.textContent = `Total Shifts: ${employeeShifts.length}`;
+                // Create a list of formatted date and time
+                const shiftsList = employeeShifts
+                  .map((shift) => {
+                    const shiftDate = new Date(shift.date);
+                    const formattedDate = shiftDate.toLocaleDateString();
+                    return `Date: ${formattedDate} Time: ${shift.StartingHour} - ${shift.EndingHour}`;
+                  })
+                  .join("<br>");
+
+                const shiftsDiv = document.createElement("div");
+                shiftsDiv.innerHTML = shiftsList;
+                tdShifts.appendChild(shiftsDiv);
+              } else {
+                tdShifts.textContent = "There are no Shifts!!";
+              }
+
+              tr.appendChild(tdName);
+              tr.appendChild(tdDepartment);
+              tr.appendChild(tdShifts);
+
+              tBody.appendChild(tr);
+            });
+          }
+        } catch (error) {
+          console.error("Error:", error);
+        }
+      }
+      async function editDepartment(departmentId) {
+        window.location.href = `EditDepartmentPage.html?departmentId=${departmentId}`;
+      }
+
+      async function editEmployee(employeeId) {
+        window.location.href = `EditEmployeePage.html?employeeId=${employeeId}`;
+      }
+      async function getDeprtments() {
+        try {
+          const response = await fetch(depUrl);
+          const departments = await response.json();
+          const departmentFilter = document.getElementById("departmentFilter");
+          // Add options for each department
+          departments.forEach((department) => {
+            const option = document.createElement("option");
+            option.value = department._id;
+            option.textContent = department.Name;
+            departmentFilter.appendChild(option);
+          });
+        } catch (error) {
+          console.error("Error:", error);
+        }
+      }
+
+      const departmentFilter = document.getElementById("departmentFilter");
+      departmentFilter.addEventListener("change", () => {
+        const selectedDepartmentId = departmentFilter.value;
+        const employeesTable = document
+          .getElementById("tBody")
+          .querySelectorAll("tr");
+
+        employeesTable.forEach((row) => {
+          const departmentId = row.getAttribute("data-department-id");
+          if (
+            selectedDepartmentId === "" ||
+            departmentId === selectedDepartmentId
+          ) {
+            // Show the row if the department matches the selected department or if "All Departments" is selected
+            row.style.display = "table-row";
+          } else {
+            // Hide the row if the department doesn't match the selected department
+            row.style.display = "none";
+          }
+        });
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="shortcut icon" href="#" />
+
+    <title>New Employee</title>
+    <style>
+      body {
+        background-color: #b0e0e6;
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 100px;
+      }
+
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      .form-container {
+        background-color: #ffffff;
+        padding: 20px;
+        border-radius: 5px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      }
+
+      .form-container h2 {
+        margin-top: 0;
+        margin-bottom: 20px;
+      }
+
+      .form-row {
+        margin-bottom: 15px;
+      }
+
+      .form-row label {
+        display: block;
+        font-weight: bold;
+      }
+
+      .form-row input,
+      .form-row select {
+        width: 60%;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        font-size: 16px;
+      }
+
+      .form-actions {
+        margin-top: 20px;
+      }
+
+      .form-actions button {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        background-color: #6495ed;
+        color: #ffffff;
+        font-size: 16px;
+        cursor: pointer;
+      }
+
+      #logout {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        background-color: #6495ed;
+        color: #ffffff;
+        font-size: 16px;
+        cursor: pointer;
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+      }
+
+      .form-actions button[type="button"] {
+        background-color: #f44336;
+      }
+
+      .form-actions button:hover,
+      .form-actions button[type="button"]:hover {
+        opacity: 0.8;
+      }
+    </style>
+  </head>
+
+  <body onload="getAllDepartments()">
+    <div class="container">
+      <div class="form-container">
+        <form id="createEmployeeForm">
+          <h2>New Employee</h2>
+          <div id="full-name"></div>
+
+          <div class="form-row">
+            <label for="first-name">First Name:</label>
+            <input type="text" id="first-name" name="first-name" required />
+          </div>
+
+          <div class="form-row">
+            <label for="last-name">Last Name:</label>
+            <input type="text" id="last-name" name="last-name" required />
+          </div>
+
+          <div class="form-row">
+            <label for="start-year">Start Work Year:</label>
+            <input type="text" id="start-year" name="start-year" required />
+          </div>
+
+          <div class="form-row">
+            <label for="department">Department:</label>
+            <select id="department" name="department">
+              <option value="" selected>Select Department:</option>
+            </select>
+          </div>
+
+          <div class="form-actions">
+            <button onclick="saveEmployee()">Save</button>
+            <button type="button" onclick="cancel()">Cancel</button>
+          </div>
+        </form>
+      </div>
+      <button id="logout">Logout</button>
+    </div>
+    <script src="../Server/Handlers/nameHandler.js"></script>
+    <script src="../Server/Handlers/logoutHandler.js"></script>
+    <script src="../Server/Handlers/authHandler.js"></script>
+    <script src="../Server/Handlers/sessionHandler.js"></script>
+
+    <script>
+      const createEmployeeForm = document.getElementById("createEmployeeForm");
+      const departmentDropdown = document.getElementById("department");
+      let departments = []; // Define departments
+
+      function cancel() {
+        window.location.href = "EmployeesPage.html";
+      }
+
+      async function saveEmployee() {
+        const url = "http://localhost:8000/Employee";
+        const actionsUrl = "http://localhost:8000/actions";
+        const selectedDepartment = document.getElementById("department").value;
+        const employeeData = {
+          FirstName: document.getElementById("first-name").value,
+          LastName: document.getElementById("last-name").value,
+          StartWorkYear: document.getElementById("start-year").value,
+        };
+        if (!employeeData.FirstName) {
+          alert("Please enter employee name");
+          return; // Exit the function if the name is empty
+        }
+        if (!employeeData.LastName) {
+          alert("Please enter employee last name");
+          return; // Exit the function if the last name is empty
+        }
+        if (!employeeData.StartWorkYear) {
+          alert("Please enter the start work year for the employee");
+          return; // Exit the function if the start work year is empty
+        } else if (isNaN(employeeData.StartWorkYear)) {
+          alert("Please enter a valid number for the start work year");
+          return; // Exit the function if the start work year is not a valid number
+        }
+        const checkSessionRes = await checkSession();
+        if (checkSessionRes) {
+          // Check if a department is selected
+          if (departments.length > 0 && selectedDepartment) {
+            employeeData.Department = selectedDepartment;
+            const resp = await fetch(url, {
+              method: "post",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(employeeData),
+            });
+
+            if (resp.ok) {
+              alert("Employee added successfully!");
+              createEmployeeForm.reset();
+            } else {
+              alert("Failed to add new employee.");
+            }
+          } else if (!selectedDepartment) {
+            // No departments exist, and no department is selected
+            const saveUrl =
+              "http://localhost:8000/saveEmployeeWithoutDepartment";
+            const resp = await fetch(saveUrl, {
+              method: "post",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(employeeData),
+            });
+
+            if (resp.status === 201) {
+              alert("Employee added successfully (withoutDepartment)!");
+              createEmployeeForm.reset();
+            } else {
+              alert("Failed to add new employee (withoutDepartment)!");
+            }
+          } else {
+            alert("Failed to add new employee");
+          }
+        } else {
+          sessionStorage.removeItem("accessToken");
+          alert("Your session has been destroyed. Please log in again.");
+          window.location.href = "LoginPage.html"; // Redirect to the login page
+        }
+      }
+
+      async function getAllDepartments() {
+        const accessToken = checkAccessToken(); // Check for access token
+        if (!accessToken) {
+          // No access token, the authHandler handles redirection
+          return;
+        }
+        console.log("accessToken:", accessToken);
+        const url = "http://localhost:8000/Department";
+
+        const response = await fetch(url);
+        departments = await response.json();
+
+        // Clear existing options
+        departmentDropdown.innerHTML =
+          '<option value="">Select Department:</option>';
+        if (departments.length === 0) {
+          // No departments available, enable the department selection
+          departmentDropdown.disabled = true;
+        } else {
+          // Departments available, disable the department selection
+          departmentDropdown.disabled = false;
+
+          // Populate the dropdown with fetched department options
+          departments.forEach((department) => {
+            const option = document.createElement("option");
+            option.value = department._id;
+            option.textContent = department.Name;
+            departmentDropdown.appendChild(option);
+          });
+        }
+      }
+    </script>
+  </body>
+</html>

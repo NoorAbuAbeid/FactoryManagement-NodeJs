@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="shortcut icon" href="#" />
+
+    <title>Department Page</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+      }
+
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+
+      th,
+      td {
+        text-align: left;
+        padding: 8px;
+      }
+
+      th {
+        background-color: #f2f2f2;
+      }
+
+      tr:nth-child(even) {
+        background-color: #f9f9f9;
+      }
+
+      a {
+        text-decoration: none;
+        color: blue;
+      }
+
+      .new-department-button {
+        margin-top: 10px;
+      }
+
+      .new-department-button a {
+        padding: 8px 16px;
+        background-color: #6495ed;
+        color: #ffffff;
+        border-radius: 4px;
+      }
+
+      #logout {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        background-color: #6495ed;
+        color: #ffffff;
+        font-size: 16px;
+        cursor: pointer;
+
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+      }
+    </style>
+  </head>
+
+  <body onload="getAllDepartments()">
+    <h1>Department Page</h1>
+    <div id="full-name"></div>
+
+    <table>
+      <tr>
+        <th>Department Name</th>
+        <th>Department Manager</th>
+        <th>Employees</th>
+      </tr>
+      <tbody id="tBody"></tbody>
+    </table>
+
+    <div class="new-department-button">
+      <a href="NewDepatmentPage.html">New Department</a>
+    </div>
+    <button id="logout">Logout</button>
+
+    <script>
+      const fullNameElement = document.getElementById("full-name");
+      const fullName = sessionStorage["fullName"];
+      fullNameElement.textContent = `Welcome, ${fullName}!`;
+
+      async function getAllDepartments() {
+        const accessToken = checkAccessToken(); // Check for access token
+        if (!accessToken) {
+          // No access token, the authHandler handles redirection
+          return;
+        }
+        console.log("accessToken:", accessToken);
+        const depUrl = "http://localhost:8000/Department";
+        const employeeUrl = "http://localhost:8000/Employee";
+        const tBody = document.getElementById("tBody");
+
+        const depResp = await fetch(depUrl);
+        const departments = await depResp.json();
+
+        if (!departments.length) alert("No availabe departments!!");
+        else {
+          departments.forEach(async (department) => {
+            //table row
+            const tr = document.createElement("tr");
+            // 'Department Name' column
+            const tdDepName = document.createElement("td");
+
+            const depLink = document.createElement("a");
+            depLink.href = "#";
+            depLink.textContent = department.Name;
+            depLink.onclick = () => editDepartment(department._id);
+            tdDepName.appendChild(depLink);
+
+            // 'Department Manager' column
+            const tdepManager = document.createElement("td");
+            // Fetch the manager's name using the manager's ID
+            if (department.Manager) {
+              // Fetch the manager's name using the manager's ID
+              const managerResp = await fetch(
+                `${employeeUrl}/${department.Manager}`
+              );
+              const manager = await managerResp.json();
+              tdepManager.innerHTML =
+                manager.FirstName + " " + manager.LastName;
+            } else {
+              // No Manager when department.Manager is null
+              tdepManager.textContent = "No Manager!!!!";
+            }
+
+            const employeesResp = await fetch(
+              `${employeeUrl}?department=${department._id}`
+            );
+            const employees = await employeesResp.json();
+            const departmentEmployees = employees.filter(
+              (employee) =>
+                employee.Department &&
+                employee.Department.toString() === department._id
+            );
+            const tdEmployees = document.createElement("td");
+
+            if (departmentEmployees.length > 0) {
+              const employeesList = departmentEmployees
+                .map((employee) => employee.FirstName + " " + employee.LastName)
+                .join(", ");
+
+              departmentEmployees.forEach((employee) => {
+                const employeeLink = document.createElement("a");
+                employeeLink.href = "#";
+                employeeLink.textContent = `${employee.FirstName} ${employee.LastName}`;
+                employeeLink.onclick = () => editEmployee(employee._id); // Redirect to Edit Employee page
+                tdEmployees.appendChild(employeeLink);
+                tdEmployees.appendChild(document.createElement("br")); // Add line breaks between employee names
+              });
+            } else {
+              tdEmployees.textContent = "There are no employees!!!!";
+            }
+
+            tr.appendChild(tdDepName);
+            tr.appendChild(tdepManager);
+            tr.appendChild(tdEmployees);
+
+            tBody.appendChild(tr);
+          });
+        }
+      }
+      async function editDepartment(departmentId) {
+        window.location.href = `EditDepartmentPage.html?departmentId=${departmentId}`;
+      }
+
+      async function editEmployee(employeeId) {
+        window.location.href = `EditEmployeePage.html?employeeId=${employeeId}`;
+      }
+    </script>
+    <script src="../Server/Handlers/logoutHandler.js"></script>
+    <script src="../Server/Handlers/authHandler.js"></script>
+  </body>
+</html>

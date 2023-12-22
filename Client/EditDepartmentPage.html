@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="shortcut icon" href="#" />
+
+    <title>Edit Department</title>
+    <style>
+      body {
+        background-color: #b0e0e6;
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 100px;
+      }
+
+      h1 {
+        margin-bottom: 20px;
+      }
+
+      .container {
+        max-width: 400px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #ffffff;
+      }
+
+      form {
+        margin-bottom: 20px;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+      }
+
+      input[type="text"],
+      select {
+        width: 300px;
+        padding: 5px;
+      }
+
+      .button-container {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+      }
+
+      button {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        background-color: #6495ed;
+        color: #ffffff;
+        font-size: 16px;
+        cursor: pointer;
+      }
+
+      #logout {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+      }
+    </style>
+  </head>
+
+  <body onload="getDepartmentData()">
+    <div class="container">
+      <h1>Edit Department</h1>
+      <div id="full-name"></div>
+
+      <form id="editForm">
+        <label for="name">Department Name:</label>
+        <input type="text" id="name" name="name" />
+
+        <label for="manager">Manager:</label>
+        <select id="manager" name="manager"></select>
+
+        <div class="button-container">
+          <button onclick="SaveDepartment()">Update</button>
+          <button id="deleteButton" onclick="deleteDepartment()">
+            Delete Department
+          </button>
+        </div>
+      </form>
+
+      <br />
+      <label for="employee">Add Employee:</label>
+      <select id="employee" name="employee" multiple></select>
+      <button id="addButton" onclick="AddEmployees()">Add</button>
+    </div>
+    <button id="logout">Logout</button>
+
+    <script>
+      const url = "http://localhost:8000/Department";
+      const employeeUrl = "http://localhost:8000/Employee";
+      const actionsUrl = "http://localhost:8000/actions";
+
+      let employeeId;
+      let departmentEmployeesArr = [];
+      let departmentId = null;
+
+      async function getDepartmentData() {
+        const accessToken = checkAccessToken(); // Check for access token
+        if (!accessToken) {
+          // No access token, the authHandler handles redirection
+          return;
+        }
+        console.log("accessToken:", accessToken);
+        const queryParams = new URLSearchParams(window.location.search);
+        departmentId = queryParams.get("departmentId");
+
+        if (!departmentId) {
+          // Handle the case where departmentId is missing in the URL
+          console.error("DepartmentId is missing in the URL.");
+          return;
+        }
+        const managerDropdown = document.getElementById("manager");
+        const response = await fetch(`${url}/${departmentId}`);
+
+        const department = await response.json();
+
+        document.getElementById("name").value = department.Name;
+
+        let manager = null;
+        if (department.Manager) {
+          const managerResponse = await fetch(
+            `${employeeUrl}/${department.Manager}`
+          );
+          manager = await managerResponse.json();
+        }
+        // Set the default value of the manager dropdown
+        managerDropdown.value = manager ? manager._id : "null";
+        // Add an option for "No Manager" if there's no manager assigned to the department
+        if (!manager) {
+          const noManagerOption = document.createElement("option");
+          noManagerOption.value = "";
+          noManagerOption.textContent = "No Manager";
+          managerDropdown.appendChild(noManagerOption);
+          // If there is a manager, add an option for the current manager
+        }
+        if (manager) {
+          const managerOption = document.createElement("option");
+          managerOption.value = manager._id;
+          managerOption.textContent = `${manager.FirstName} ${manager.LastName}`;
+          managerDropdown.appendChild(managerOption);
+        }
+        // Fetch and populate the list of all managers (except the current one)
+        const managersResponse = await fetch(`${employeeUrl}?role=manager`);
+        const managers = await managersResponse.json();
+        // Populate the remaining managers in the dropdown
+        managers.forEach((manager) => {
+          if (!manager || manager._id !== department.Manager) {
+            const option = document.createElement("option");
+            option.value = manager._id;
+            option.textContent = `${manager.FirstName} ${manager.LastName}`;
+            managerDropdown.appendChild(option);
+          }
+        });
+        employeeId = department._id;
+
+        // Fetch all employees
+        const allEmployeesRes = await fetch(`${employeeUrl}`);
+        const allEmployees = await allEmployeesRes.json();
+        // Fetch all employees belonging to the selected department
+        const departmentEmployeesRes = await fetch(
+          `${employeeUrl}/department/${departmentId}`
+        );
+        const departmentEmployees = await departmentEmployeesRes.json();
+        departmentEmployeesArr = departmentEmployees;
+
+        // Fetch all departments
+        const departmentsRes = await fetch(`${url}`);
+        const departments = await departmentsRes.json();
+
+        // Create a list of employees that do not belong to the selected department and are not managers
+        const nonManagerEmployees = allEmployees.filter((employee) => {
+          const isManager = departments.some(
+            (department) => department.Manager === employee._id
+          );
+          return (
+            !departmentEmployees.some(
+              (departmentEmployee) => departmentEmployee._id === employee._id
+            ) && !isManager
+          );
+        });
+
+        const employeeDropdown = document.getElementById("employee");
+
+        if (nonManagerEmployees.length > 0) {
+          // Populate the employees dropdown with employees not in the department
+          nonManagerEmployees.forEach((employee) => {
+            const option = document.createElement("option");
+            option.value = employee._id;
+            option.textContent = `${employee.FirstName} ${employee.LastName}`;
+            employeeDropdown.appendChild(option);
+          });
+        } else {
+          const option = document.createElement("option");
+          option.textContent = "There are no avaialbe employees!!";
+          option.disabled = true;
+          employeeDropdown.appendChild(option);
+        }
+      }
+
+      async function SaveDepartment() {
+        if (!departmentId) {
+          alert("DepartmentId is missing.");
+          return;
+        }
+        const departmentName = document.getElementById("name").value;
+        const selectedManager = document.getElementById("manager").value;
+
+        const updatedDepartment = {
+          Name: document.getElementById("name").value,
+          Manager: document.getElementById("manager").value,
+        };
+
+        const response = await fetch(`${url}/${departmentId}`, {
+          method: "put",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updatedDepartment),
+        });
+        console.log("response:", response);
+
+        if (response.status === 400) {
+          const errorResponse = await response.json();
+
+          if (errorResponse.field === "name") {
+            alert(
+              "Department name already exists, please choose another name."
+            );
+            window.location.reload();
+          } else if (errorResponse.field === "manager") {
+            alert("Manager is already assigned to another department.");
+            window.location.reload();
+          }
+          return;
+        } else {
+          const checkSessionRes = await checkSession();
+          if (!checkSessionRes) {
+            sessionStorage.removeItem("accessToken");
+            alert("Your session has been destroyed. Please log in again.");
+            window.location.href = "LoginPage.html"; // Redirect to the login page
+          } else {
+            if (response.status === 200) {
+              alert("Department updated successfully!");
+              window.location.reload();
+            } else {
+              alert("Failed to update department.");
+              window.location.reload();
+            }
+          }
+        }
+      }
+
+      async function deleteDepartment() {
+        const confirmed = confirm(
+          "Are you sure you want to delete this department?"
+        );
+        if (!confirmed) {
+          return;
+        }
+        const checkSessionRes = await checkSession();
+        if (checkSessionRes) {
+          const response = await fetch(`${url}/${departmentId}`, {
+            method: "delete",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ departmentEmployeesArr }),
+          });
+          if (response.status === 200) {
+            alert("Department deleted successfully!");
+            window.location.reload();
+          } else {
+            alert("Failed to delete department.");
+            window.location.reload();
+          }
+        } else {
+          sessionStorage.removeItem("accessToken");
+          alert("Your session has been destroyed. Please log in again.");
+          window.location.href = "LoginPage.html"; // Redirect to the login page
+        }
+      }
+      async function AddEmployees() {
+        const selectedEmployees = Array.from(
+          document.getElementById("employee").selectedOptions
+        ).map((option) => option.value);
+        if (selectedEmployees.length == 0) {
+          alert("You have to choose at least one employee!");
+          return;
+        }
+        const checkSessionRes = await checkSession();
+        if (checkSessionRes) {
+          const response = await fetch(`${url}/${departmentId}/addEmployees`, {
+            method: "put",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ employees: selectedEmployees }),
+          });
+
+          if (response.status === 200) {
+            alert("Employees added successfully!");
+          } else {
+            alert("Failed to add employees.");
+          }
+        } else {
+          sessionStorage.removeItem("accessToken");
+          alert("Your session has been destroyed. Please log in again.");
+          window.location.href = "LoginPage.html"; // Redirect to the login page
+        }
+      }
+    </script>
+    <script src="../Server/Handlers/nameHandler.js"></script>
+    <script src="../Server/Handlers/logoutHandler.js"></script>
+    <script src="../Server/Handlers/authHandler.js"></script>
+    <script src="../Server/Handlers/sessionHandler.js"></script>
+  </body>
+</html>

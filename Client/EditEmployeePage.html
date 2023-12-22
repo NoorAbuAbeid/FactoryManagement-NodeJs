@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="shortcut icon" href="#" />
+
+    <title>Edit Employee</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #b0e0e6;
+      }
+
+      h1 {
+        background-color: #333;
+        color: #fff;
+        padding: 10px;
+        text-align: center;
+      }
+
+      .formContainer {
+        max-width: 470px;
+        margin: 20px auto;
+        padding: 20px;
+        border: 1px solid #fff;
+        border-radius: 5px;
+      }
+
+      .formContainer label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+      }
+
+      .formContainer input[type="text"],
+      .formContainer select {
+        width: 50%;
+        padding: 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
+
+      .form-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 10px;
+      }
+
+      .form-col {
+        flex-basis: 50%;
+      }
+
+      button {
+        margin-top: 10px;
+        padding: 8px 16px;
+        background-color: #6495ed;
+        color: #ffffff;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        border: 1px solid;
+      }
+
+      .shiftsTable {
+        max-width: 470px;
+        margin: 20px auto;
+      }
+
+      .shiftsTable table {
+        width: 80%;
+        border-collapse: collapse;
+      }
+
+      .shiftsTable th,
+      .shiftsTable td {
+        padding: 4px;
+        border: 1px solid #fff;
+      }
+
+      .registerForShift {
+        max-width: 470px;
+        margin: 20px auto;
+      }
+
+      .registerForShift h2 {
+        margin-bottom: 10px;
+      }
+
+      .registerForShift label {
+        display: block;
+        margin-bottom: 10px;
+      }
+
+      .registerForShift select {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
+
+      #logout {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+      }
+    </style>
+  </head>
+
+  <body onload="getEmployeeData();getEmployeeShifts();getAvaliableShifts();">
+    <h1>Edit Employee</h1>
+    <div id="full-name"></div>
+
+    <div class="formContainer">
+      <form>
+        <div class="form-row">
+          <div class="form-col">
+            <label for="first-name">First Name:</label>
+            <input type="text" id="first-name" name="first-name" />
+          </div>
+          <div class="form-col">
+            <label for="last-name">Last Name:</label>
+            <input type="text" id="last-name" name="last-name" />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-col">
+            <label for="start-year">Start Work Year:</label>
+            <input type="text" id="start-year" name="start-year" />
+          </div>
+          <div class="form-col">
+            <label for="department">Department:</label>
+            <select id="department" name="department"></select>
+          </div>
+        </div>
+        <button type="button" onclick="UpdateEmployee()">Update</button>
+        <button type="button" onclick="deleteEmployee()">Delete</button>
+      </form>
+    </div>
+
+    <div class="shiftsTable">
+      <h2>Shifts</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Starting Hour</th>
+            <th>Ending Hour</th>
+          </tr>
+        </thead>
+        <tbody id="tBody"></tbody>
+      </table>
+    </div>
+
+    <div class="registerForShift">
+      <h2>Register for Shift</h2>
+      <h4>Choose an existing shift:</h4>
+      <select id="shiftsSelect" name="shiftsSelect" multiple></select>
+      <button onclick="registerForShift()">Register</button>
+    </div>
+
+    <button id="logout">Logout</button>
+
+    <script>
+      const employeeUrl = "http://localhost:8000/Employee";
+      const depUrl = "http://localhost:8000/Department";
+      let depData;
+      let employeeId = null;
+
+      async function getEmployeeData() {
+        const accessToken = checkAccessToken(); // Check for access token
+        if (!accessToken) {
+          // No access token, the authHandler handles redirection
+          return;
+        }
+        console.log("accessToken:", accessToken);
+        const queryParams = new URLSearchParams(window.location.search);
+        employeeId = queryParams.get("employeeId");
+
+        if (!employeeId) {
+          console.error("EmployeeId is missing in the URL.");
+          return;
+        }
+
+        // Fetch employee data based on the employeeId
+        const response = await fetch(`${employeeUrl}/${employeeId}`);
+        const employeeData = await response.json();
+
+        // Populate the form fields with the employee's data
+        document.getElementById("first-name").value = employeeData.FirstName;
+        document.getElementById("last-name").value = employeeData.LastName;
+        document.getElementById("start-year").value =
+          employeeData.StartWorkYear;
+        // Populate the department dropdown
+        const departmentDropdown = document.getElementById("department");
+
+        // Add the employee's department as the default option
+        if (employeeData.Department) {
+          const depRes = await fetch(`${depUrl}/${employeeData.Department}`);
+          const departmentData = await depRes.json();
+          depData = departmentData;
+          const employeeDepartmentOption = document.createElement("option");
+          employeeDepartmentOption.value = employeeData.Department;
+          employeeDepartmentOption.textContent = departmentData.Name;
+          departmentDropdown.appendChild(employeeDepartmentOption);
+        } else {
+          //case: no department!
+          const employeeDepartmentOption = document.createElement("option");
+          employeeDepartmentOption.textContent = "No department!";
+          departmentDropdown.appendChild(employeeDepartmentOption);
+        }
+        // Fetch the list of all departments with names
+        const allDepartmentsResponse = await fetch(depUrl); // Fetch all departments
+        const allDepartments = await allDepartmentsResponse.json();
+        // Add other department options
+        allDepartments.forEach((department) => {
+          if (department._id !== employeeData.Department) {
+            // Exclude the employee's department
+            const option = document.createElement("option");
+            option.value = department._id;
+            option.textContent = department.Name;
+            departmentDropdown.appendChild(option);
+          }
+        });
+      }
+
+      async function deleteEmployee() {
+        const confirmed = confirm(
+          "Are you sure you want to delete this employee?"
+        );
+        if (!confirmed) {
+          return;
+        }
+        const checkSessionRes = await checkSession();
+        if (checkSessionRes) {
+          const response = await fetch(`${employeeUrl}/${employeeId}`, {
+            method: "delete",
+            headers: { "Content-Type": "application/json" },
+          });
+
+          if (response.status === 200) {
+            alert("Employee deleted successfully!");
+            window.location.reload();
+          } else {
+            alert("Failed to delete employee.");
+            window.location.reload();
+          }
+        } else {
+          sessionStorage.removeItem("accessToken");
+          alert("Your session has been destroyed. Please log in again.");
+          window.location.href = "LoginPage.html"; // Redirect to the login page
+        }
+      }
+      async function getEmployeeShifts() {
+        const response = await fetch(`${employeeUrl}/${employeeId}/shifts`);
+
+        const shifts = await response.json();
+        const tbody = document.getElementById("tBody");
+
+        shifts.forEach((shift) => {
+          //table row
+          const tr = document.createElement("tr");
+          // 'Date' column
+          const tdDate = document.createElement("td");
+          const formattedDate = new Date(shift.date).toLocaleDateString();
+
+          tdDate.textContent = formattedDate;
+          // 'StartHour' column
+          const tdStartingHour = document.createElement("td");
+          tdStartingHour.textContent = shift.StartingHour;
+          // 'EndHour' column
+          const tdEndingHour = document.createElement("td");
+          tdEndingHour.textContent = shift.EndingHour;
+
+          tr.appendChild(tdDate);
+          tr.appendChild(tdStartingHour);
+          tr.appendChild(tdEndingHour);
+
+          tbody.appendChild(tr);
+        });
+      }
+
+      async function getAvaliableShifts() {
+        const resp = await fetch(
+          `${employeeUrl}/availableShifts/${employeeId}`
+        );
+
+        const availableShifts = await resp.json();
+        const shiftsSelect = document.getElementById("shiftsSelect");
+
+        if (availableShifts.length == 0) {
+          const option = document.createElement("option");
+          option.textContent = "There are no availabe shifts!!";
+          shiftsSelect.appendChild(option);
+          shiftsSelect.disabled = true;
+        }
+
+        availableShifts.forEach((shift) => {
+          const option = document.createElement("option");
+          const date = new Date(shift.date);
+          const formattedDate = date.toLocaleDateString();
+          option.value = shift._id;
+          option.textContent = `${formattedDate} ${shift.StartingHour} - ${shift.EndingHour}`;
+          shiftsSelect.appendChild(option);
+        });
+      }
+
+      async function registerForShift() {
+        const selectedShifts = Array.from(
+          document.getElementById("shiftsSelect").selectedOptions
+        ).map((option) => option.value);
+        if (selectedShifts.length === 0) {
+          alert("You have to choose at least one shift!");
+          return;
+        }
+        const data = {
+          shifts: selectedShifts,
+        };
+        const checkSessionRes = await checkSession();
+        if (checkSessionRes) {
+          const resp = await fetch(
+            `${employeeUrl}/shiftRegister/${employeeId}`,
+            {
+              method: "put",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(data),
+            }
+          );
+          if (resp.status == 200) {
+            alert("Allocate employees successfuly!");
+            window.location.reload();
+          } else {
+            alert("Failed to allocate employees!");
+            window.location.reload();
+          }
+        } else {
+          sessionStorage.removeItem("accessToken");
+          alert("Your session has been destroyed. Please log in again.");
+          window.location.href = "LoginPage.html"; // Redirect to the login page
+        }
+      }
+
+      async function UpdateEmployee() {
+        if (!employeeId) {
+          alert("DepartmentId is missing.");
+          return;
+        }
+
+        // Get the selected department from the dropdown
+        const selectedDepartment = document.getElementById("department").value;
+
+        // Check if the selected department is "No department" and the user changed the
+        //employee details!
+        if (selectedDepartment === "No department!") {
+          alert("Please choose a department before updating the employee.");
+          return;
+        }
+
+        const updatedEmployee = {
+          FirstName: document.getElementById("first-name").value,
+          LastName: document.getElementById("last-name").value,
+          StartWorkYear: document.getElementById("start-year").value,
+        };
+        if (isNaN(updatedEmployee.StartWorkYear)) {
+          alert("Enter a valid number for start work year!!");
+        }
+
+        // Check if depData exists and if the selected department is different
+        if (depData && selectedDepartment !== depData.Department) {
+          const isManager = await checkIfEmployeeIsManager(employeeId);
+          if (isManager) {
+            await depChange();
+          }
+
+          updatedEmployee.Department = selectedDepartment;
+        } else if (!depData && selectedDepartment !== "No department!") {
+          // If employee doesn't have a department and a department is selected
+          updatedEmployee.Department = selectedDepartment;
+        }
+        const checkSessionRes = await checkSession();
+        if (checkSessionRes) {
+          try {
+            const response = await fetch(`${employeeUrl}/${employeeId}`, {
+              method: "put",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(updatedEmployee),
+            });
+
+            if (response.status === 200) {
+              alert("The employee updated successfully");
+              window.location.reload();
+            } else {
+              alert("Failed to update employee!");
+              window.location.reload();
+            }
+          } catch (error) {
+            console.error("Error updating employee:", error);
+            alert("An error occurred while updating the employee.");
+          }
+        } else {
+          sessionStorage.removeItem("accessToken");
+          alert("Your session has been destroyed. Please log in again.");
+          window.location.href = "LoginPage.html"; // Redirect to the login page
+        }
+      }
+      async function checkIfEmployeeIsManager(employeeId) {
+        const response = await fetch(depUrl);
+        const departments = await response.json();
+
+        // Check if the employee is a manager of any department
+        return departments.some(
+          (department) => department.Manager === employeeId
+        );
+      }
+      async function depChange() {
+        console.log("Entering depChange");
+
+        // Save the updated department data
+        const response = await fetch(`${depUrl}/${depData._id}/updateManager`, {
+          method: "put",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(depData),
+        });
+      }
+    </script>
+
+    <script src="../Server/Handlers/nameHandler.js"></script>
+    <script src="../Server/Handlers/logoutHandler.js"></script>
+    <script src="../Server/Handlers/authHandler.js"></script>
+    <script src="../Server/Handlers/sessionHandler.js"></script>
+  </body>
+</html>

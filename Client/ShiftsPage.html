@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="shortcut icon" href="#" />
+
+    <title>Shifts</title>
+
+    <style>
+      body {
+        background-color: #b0e0e6;
+        font-family: Arial, sans-serif;
+        margin: 0;
+      }
+
+      h1 {
+        margin-bottom: 20px;
+      }
+
+      .container {
+        max-width: 400px;
+        margin: 0 auto;
+      }
+
+      form {
+        margin-bottom: 20px;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+      }
+
+      input[type="text"],
+      input[type="date"],
+      input[type="number"] {
+        width: 300px;
+        padding: 5px;
+      }
+
+      select {
+        width: 300px;
+        padding: 5px;
+      }
+
+      .button-container {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+      }
+
+      button {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        background-color: #6495ed;
+        color: #ffffff;
+        font-size: 16px;
+        cursor: pointer;
+      }
+
+      #logout {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        width: 8%;
+      }
+
+      .shift-group {
+        border: 2px solid #000;
+        padding: 10px;
+        margin-bottom: 20px;
+      }
+    </style>
+  </head>
+
+  <body onload="getAllEmployees();  getAllShifts();">
+    <div class="container">
+      <h1>Shifts</h1>
+      <div id="full-name"></div>
+
+      <!-- Form for creating new shifts -->
+      <div class="shift-group">
+        <h3>Create Shift:</h3>
+        <form id="createShiftForm">
+          <label for="date">Date:</label>
+          <input type="date" id="date" name="date" required />
+
+          <label for="startHour">Starting Hour:</label>
+          <input type="time" id="startHour" name="startHour" required />
+
+          <label for="endHour">Ending Hour:</label>
+          <input type="time" id="endHour" name="endHour" required />
+
+          <label for="selectedEmployees">Select Employees:</label>
+          <select
+            id="selectedEmployees"
+            name="selectedEmployees"
+            multiple
+          ></select>
+          <button id="createShiftButton" onclick="createShift()">
+            Create Shift
+          </button>
+        </form>
+      </div>
+
+      <div class="shift-group">
+        <h3>Change Shift:</h3>
+        <!-- Form for changing existing shifts -->
+        <form id="changeShiftForm">
+          <label for="existingShift">Select Shift:</label>
+          <select id="existingShift" name="existingShift"></select>
+
+          <!--<label for="newDate">New Date:</label>
+          <input type="date" id="newDate" name="newDate" />-->
+
+          <label for="newStartHour">New Starting Hour:</label>
+          <input type="time" id="newStartHour" name="newStartHour" />
+
+          <label for="newEndHour">New Ending Hour:</label>
+          <input type="time" id="newEndHour" name="newEndHour" />
+
+          <button type="button" id="changeShiftButton" onclick="changeShift()">
+            Change Shift
+          </button>
+        </form>
+      </div>
+      <div class="shift-group">
+        <h3>Allocate Employee:</h3>
+
+        <form id="allocateEmployeeForm">
+          <label for="shiftforallocateEmployee">Shift:</label>
+          <select
+            id="shiftforallocateEmployee"
+            name="shiftforallocateEmployee"
+          ></select>
+
+          <label for="allocateEmployees">Employee:</label>
+          <select
+            id="allocateEmployees"
+            name="allocateEmployees"
+            multiple
+          ></select>
+          <br />
+          <button
+            type="button"
+            id="allocateButton"
+            onclick="allocateEmployee()"
+          >
+            Allocate Employee
+          </button>
+        </form>
+      </div>
+      <button id="logout">Logout</button>
+    </div>
+    <script src="../Server/Handlers/nameHandler.js"></script>
+    <script src="../Server/Handlers/logoutHandler.js"></script>
+    <script src="../Server/Handlers/authHandler.js"></script>
+    <script src="../Server/Handlers/sessionHandler.js"></script>
+
+    <script>
+      const url = "http://localhost:8000/Shift";
+      let allEmployees = [];
+      let shiftsTemp = [];
+      async function createShift() {
+        const selectedEmployees = Array.from(
+          document.getElementById("selectedEmployees").selectedOptions
+        ).map((option) => option.value);
+
+        const shiftData = {
+          date: document.getElementById("date").value,
+          StartingHour: document.getElementById("startHour").value,
+          EndingHour: document.getElementById("endHour").value,
+          employee: selectedEmployees,
+        };
+        if (!shiftData.date) {
+          alert("Please choose a date");
+          return;
+        }
+        if (!shiftData.StartingHour) {
+          alert("Please enter the starting hour");
+          return;
+        }
+        if (!shiftData.EndingHour) {
+          alert("Please choose ending hour");
+          return;
+        }
+        if (shiftData.employee.length == 0) {
+          alert("You have to choose at least one employee!");
+          return;
+        }
+        const checkSessionRes = await checkSession();
+        if (checkSessionRes) {
+          const resp = await fetch(url, {
+            method: "post",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(shiftData),
+          });
+          console.log(resp);
+
+          if (resp.status) {
+            alert("The shift added successfully!");
+          } else alert("Failed to add new shift!");
+        } else {
+          sessionStorage.removeItem("accessToken");
+          alert("Your session has been destroyed. Please log in again.");
+          window.location.href = "LoginPage.html"; // Redirect to the login page
+        }
+      }
+
+      async function getAllEmployees() {
+        const url = "http://localhost:8000/Employee";
+        const response = await fetch(url);
+        const employees = await response.json();
+        const managerSelect = document.getElementById("selectedEmployees");
+        allEmployees = employees;
+
+        // Clear existing options
+        managerSelect.innerHTML = "";
+        if (employees.length > 0) {
+          // Populate the dropdown with fetched employees
+          employees.forEach((employee) => {
+            const optionChangeShift = document.createElement("option");
+            optionChangeShift.value = employee._id;
+            optionChangeShift.textContent =
+              employee.FirstName + " " + employee.LastName;
+            managerSelect.appendChild(optionChangeShift);
+          });
+        } else {
+          const optionChangeShift = document.createElement("option");
+          optionChangeShift.textContent = "No avialbe employees!!";
+          managerSelect.appendChild(optionChangeShift);
+          managerSelect.disabled = true;
+        }
+      }
+      async function getAllShifts() {
+        const accessToken = checkAccessToken(); // Check for access token
+        if (!accessToken) {
+          // No access token, the authHandler handles redirection
+          return;
+        }
+        console.log("accessToken:", accessToken);
+        const response = await fetch(url);
+        const shifts = await response.json();
+        const shiftSelect = document.getElementById("existingShift");
+        const shiftSelectEmployee = document.getElementById(
+          "shiftforallocateEmployee"
+        );
+        shiftsTemp = shifts;
+        console.log(shiftsTemp);
+        // Clear existing options
+        if (shifts.length) {
+          shiftSelect.innerHTML = '<option value="">Select a Shift</option>';
+          shiftSelectEmployee.innerHTML =
+            '<option value="">Select a Shift:</option>';
+
+          // Populate the dropdown with fetched shifts
+          shifts.forEach((shift) => {
+            const optionChangeShift = document.createElement("option");
+            const optionAllocateEmployee = document.createElement("option");
+            optionChangeShift.value = shift._id;
+            optionAllocateEmployee.value = shift._id;
+            // Format the date and time
+            const dateVar = new Date(shift.date);
+            const formattedDate = dateVar.toLocaleDateString();
+            optionChangeShift.textContent = `${formattedDate} ${shift.StartingHour} - ${shift.EndingHour}`;
+            optionAllocateEmployee.textContent = `${formattedDate} ${shift.StartingHour} - ${shift.EndingHour}`;
+            shiftSelect.appendChild(optionChangeShift);
+            shiftSelectEmployee.appendChild(optionAllocateEmployee);
+          });
+
+          // Add event listener to the dropdown to display shift details on input
+          shiftSelect.addEventListener("input", () => {
+            const selectedShiftId = shiftSelect.value;
+            if (selectedShiftId) {
+              // Find the selected shift from the shifts array
+              const selectedShift = shifts.find(
+                (shift) => shift._id === selectedShiftId
+              );
+              // Display shift details in the form
+              //const dateInput = document.getElementById("newDate");
+              //const selectedDate = new Date(selectedShift.date);
+
+              //dateInput.value = selectedDate.toISOString().split("T")[0]; // Format as 'yyyy-MM-dd'
+              document.getElementById("newStartHour").value =
+                selectedShift.StartingHour;
+              document.getElementById("newEndHour").value =
+                selectedShift.EndingHour;
+            } else {
+              // Clear the form if no shift is selected
+              //document.getElementById("newDate").value = "";
+              document.getElementById("newStartHour").value = "";
+              document.getElementById("newEndHour").value = "";
+            }
+          });
+          shiftSelectEmployee.addEventListener("input", () => {
+            getAvaliableEmployees();
+          });
+        } else {
+          const optionChangeShift = document.createElement("option");
+          optionChangeShift.textContent = "No avialbe shifts!!";
+          shiftSelect.appendChild(optionChangeShift);
+          shiftSelect.disabled = true;
+
+          const optionShift = document.createElement("option");
+          optionShift.textContent = "No avialbe shifts!!";
+          shiftSelectEmployee.appendChild(optionShift);
+          shiftSelectEmployee.disabled = true;
+        }
+      }
+      async function getAvaliableEmployees() {
+        const shiftSelect = document.getElementById("shiftforallocateEmployee");
+        const allocateEmployeesSelect =
+          document.getElementById("allocateEmployees");
+        const selectedShiftId = shiftSelect.value;
+
+        // Fetch the selected shift data
+        const response = await fetch(`${url}/${selectedShiftId}`);
+        const selectedShift = await response.json();
+
+        if (selectedShift && Array.isArray(selectedShift.employee)) {
+          // Get the IDs of employees already allocated to the selected shift
+          const allocatedEmployeeIds = selectedShift.employee;
+          // Filter out the employees who are already allocated to the selected shift
+          const availableEmployees = allEmployees.filter(
+            (employee) => !allocatedEmployeeIds.includes(employee._id)
+          );
+
+          // Clear the allocation dropdown
+          allocateEmployeesSelect.innerHTML = "";
+
+          if (availableEmployees.length > 0) {
+            availableEmployees.forEach((employee) => {
+              const option = document.createElement("option");
+              option.value = employee._id;
+              option.textContent = `${employee.FirstName} ${employee.LastName}`;
+              allocateEmployeesSelect.appendChild(option);
+            });
+          } else {
+            // Add a message when there are no available employees
+            const option = document.createElement("option");
+            option.value = "";
+            option.textContent = "No available employees";
+            option.disabled = true;
+            allocateEmployeesSelect.appendChild(option);
+          }
+        } else {
+          // Clear the allocation dropdown if no shift is selected or if the shift data is incomplete
+          allocateEmployeesSelect.innerHTML = "";
+        }
+      }
+
+      async function changeShift() {
+        const selectedShiftId = document.getElementById("existingShift").value;
+        //const newDate = document.getElementById("newDate").value;
+        const newStartHour = document.getElementById("newStartHour").value;
+        const newEndHour = document.getElementById("newEndHour").value;
+
+        if (!selectedShiftId) {
+          alert("You have to choose a shift!");
+          return;
+        }
+
+        const shiftData = {
+          //date: newDate,
+          StartingHour: newStartHour,
+          EndingHour: newEndHour,
+        };
+        const checkSessionRes = await checkSession();
+        if (checkSessionRes) {
+          const resp = await fetch(`${url}/${selectedShiftId}`, {
+            method: "put",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(shiftData),
+          });
+
+          if (resp.status == 200) {
+            alert("The shift updated successfully!");
+          } else {
+            alert("Failed to update the shift!");
+          }
+        } else {
+          sessionStorage.removeItem("accessToken");
+          alert("Your session has been destroyed. Please log in again.");
+          window.location.href = "LoginPage.html"; // Redirect to the login page
+        }
+      }
+      async function allocateEmployee() {
+        const selectedShiftId = document.getElementById(
+          "shiftforallocateEmployee"
+        ).value;
+        const selectedEmployees = Array.from(
+          document.getElementById("allocateEmployees").selectedOptions
+        ).map((option) => option.value);
+        if (!selectedShiftId) {
+          alert("You have to choose a shift!");
+          return;
+        }
+        if (!selectedEmployees || selectedEmployees.length === 0) {
+          alert("You have to choose at least one employee!");
+          return;
+        }
+        const DataEmployees = {
+          employees: selectedEmployees,
+        };
+        const checkSessionRes = await checkSession();
+        if (checkSessionRes) {
+          const resp = await fetch(`${url}/allocate/${selectedShiftId}`, {
+            method: "put",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(DataEmployees),
+          });
+
+          console.log("Response Status:", resp.status);
+
+          if (resp.status == 200) {
+            alert("Allocate employees successfuly!");
+          } else {
+            alert("Failed to allocate employees!");
+          }
+        } else {
+          sessionStorage.removeItem("accessToken");
+          alert("Your session has been destroyed. Please log in again.");
+          window.location.href = "LoginPage.html"; // Redirect to the login page
+        }
+      }
+    </script>
+  </body>
+</html>

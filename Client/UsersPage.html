@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="shortcut icon" href="#" />
+
+    <title>Users</title>
+    <style>
+      body {
+        background-color: #b0e0e6;
+        font-family: Arial, sans-serif;
+        margin: 0;
+      }
+
+      h1 {
+        margin-bottom: 20px;
+      }
+
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 20px;
+        background-origin: padding-box;
+        background-color: #ffffff;
+      }
+
+      th,
+      td {
+        padding: 10px;
+        text-align: left;
+        border: 1px solid #6495ed;
+      }
+
+      th {
+        background-color: #6495ed;
+        color: #ffffff;
+      }
+
+      #logout {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        width: 8%;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        background-color: #6495ed;
+        color: #ffffff;
+        font-size: 16px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+
+  <body onload="getAllusers()">
+    <div class="container">
+      <h1>Users</h1>
+      <div id="full-name"></div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Full Name</th>
+            <th>Max Actions</th>
+            <th>Actions Allowed</th>
+          </tr>
+        </thead>
+        <tbody id="tBody"></tbody>
+      </table>
+
+      <button id="logout">Logout</button>
+    </div>
+    <script src="../Server/Handlers/nameHandler.js"></script>
+    <script src="../Server/Handlers/logoutHandler.js"></script>
+    <script src="../Server/Handlers/authHandler.js"></script>
+
+    <script>
+      const url = "http://localhost:8000/userInfo";
+      async function getAllusers() {
+        const accessToken = checkAccessToken(); // Check for access token
+        if (!accessToken) {
+          // No access token, the authHandler handles redirection
+          return;
+        }
+        console.log("accessToken:", accessToken);
+
+        const resp = await fetch(url);
+        const users = await resp.json();
+        const tBody = document.getElementById("tBody");
+
+        const actionAllowedPromises = users.map(async (user) => {
+          const actionsAllowedResp = fetch(
+            `${url}/actionsAllowed/${user.FullName}`
+          );
+          const actionsAllowedData = await (await actionsAllowedResp).json();
+          return { user, actionsAllowedData };
+        });
+
+        const results = await Promise.all(actionAllowedPromises);
+
+        results.forEach(({ user, actionsAllowedData }) => {
+          const tr = document.createElement("tr");
+          const tdFullName = document.createElement("td");
+          tdFullName.innerHTML = user.FullName;
+
+          const tdNumOfActions = document.createElement("td");
+          tdNumOfActions.innerHTML = user.NumOfActions;
+
+          const tdNumOfActionsAllowed = document.createElement("td");
+          tdNumOfActionsAllowed.innerHTML = actionsAllowedData.actionAllowed;
+
+          tr.appendChild(tdFullName);
+          tr.appendChild(tdNumOfActions);
+          tr.appendChild(tdNumOfActionsAllowed);
+
+          tBody.appendChild(tr);
+        });
+      }
+    </script>
+  </body>
+</html>

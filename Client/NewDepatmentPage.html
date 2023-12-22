@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="shortcut icon" href="#" />
+
+    <title>New Department</title>
+    <style>
+      body {
+        background-color: #b0e0e6;
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 100px;
+      }
+
+      .container {
+        max-width: 400px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      .form-container {
+        background-color: #ffffff;
+        padding: 20px;
+        border-radius: 5px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      }
+
+      .form-container h2 {
+        margin-top: 0;
+        margin-bottom: 20px;
+        text-align: center;
+      }
+
+      .form-row {
+        margin-bottom: 15px;
+      }
+
+      .form-row label {
+        display: block;
+        font-weight: bold;
+      }
+
+      .form-row input,
+      .form-row select {
+        width: 60%;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        font-size: 16px;
+      }
+
+      .form-actions {
+        margin-top: 20px;
+      }
+
+      .form-actions button {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        background-color: #6495ed;
+        color: #ffffff;
+        font-size: 16px;
+        cursor: pointer;
+      }
+
+      .form-actions button[type="button"] {
+        background-color: #f44336;
+      }
+
+      .form-actions button:hover,
+      .form-actions button[type="button"]:hover {
+        opacity: 0.8;
+      }
+
+      #logout {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        width: 8%;
+
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        background-color: #6495ed;
+        color: #ffffff;
+        font-size: 16px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+
+  <body onload="GetAllEmployees()">
+    <div class="container">
+      <div class="form-container">
+        <form id="createDepartmentForm">
+          <h2>Create New Department</h2>
+          <div id="full-name"></div>
+
+          <div class="form-row">
+            <label for="name">Name:</label>
+            <input type="text" id="name" name="name" />
+          </div>
+          <div class="form-row">
+            <label for="manager">Manager:</label>
+            <select id="manager" name="manager">
+              <option value="">Select a Manager</option>
+            </select>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" onclick="saveDepartment()">Save</button>
+            <button type="button" onclick="cancel()">Cancel</button>
+          </div>
+        </form>
+        <button id="logout">Logout</button>
+      </div>
+    </div>
+
+    <script src="../Server/Handlers/nameHandler.js"></script>
+    <script src="../Server/Handlers/logoutHandler.js"></script>
+    <script src="../Server/Handlers/authHandler.js"></script>
+    <script src="../Server/Handlers/sessionHandler.js"></script>
+
+    <script>
+      const url = "http://localhost:8000/Department";
+      const createDepartmentForm = document.getElementById(
+        "createDepartmentForm"
+      );
+
+      function cancel() {
+        window.location.href = "DepartmentPage.html";
+      }
+
+      async function saveDepartment() {
+        const departmentName = document.getElementById("name").value;
+        const managerId = document.getElementById("manager").value;
+        //const checkSessionRes = checkSession();
+        // Check if a department name is provided
+        if (!departmentName) {
+          alert("Please enter a department name.");
+          return; // Exit the function if the name is empty
+        }
+
+        // Check if a manager is selected
+        else if (!managerId) {
+          alert("Please choose a manager.");
+          return; // Exit the function if no manager is selected
+        }
+
+        const departmentData = {
+          Name: departmentName,
+          Manager: managerId,
+        };
+
+        const resp = await fetch(url, {
+          method: "post",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(departmentData),
+        });
+        console.log("resp", resp);
+
+        if (resp.status === 400) {
+          const errorResponse = await resp.json();
+
+          if (errorResponse.field === "name") {
+            alert(
+              "Department name already exists, please choose another name."
+            );
+          } else if (errorResponse.field === "manager") {
+            alert("Manager is already assigned to another department.");
+          }
+          return;
+        } else {
+          const checkSessionRes = await checkSession();
+          if (!checkSessionRes) {
+            sessionStorage.removeItem("accessToken");
+            alert("Your session has been destroyed. Please log in again.");
+            window.location.href = "LoginPage.html"; // Redirect to the login page
+          } else {
+            if (resp.status === 201) {
+              const department = await resp.json();
+              alert("Department added successfully!");
+              // Update the manager's department
+              const updateEmployeeResp = await fetch(
+                `http://localhost:8000/Employee/updateEmployeeDepartment/${managerId}`,
+                {
+                  method: "put",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ Department: department._id }),
+                }
+              );
+              if (updateEmployeeResp.status === 200) {
+                alert("Manager's department updated successfully!"); ////
+              } else {
+                alert("Failed to update manager's department");
+              }
+              createDepartmentForm.reset();
+            }
+          }
+        }
+      }
+      async function GetAllEmployees() {
+        const accessToken = checkAccessToken(); // Check for access token
+        if (!accessToken) {
+          // No access token, the authHandler handles redirection
+          return;
+        }
+        console.log("accessToken:", accessToken);
+        const url = "http://localhost:8000/Employee";
+        const response = await fetch(url);
+        const employees = await response.json();
+        const managerSelect = document.getElementById("manager");
+
+        // Clear existing options
+        managerSelect.innerHTML = '<option value="">Select  Manager:</option>';
+
+        if (employees.length > 0) {
+          // Populate the dropdown with fetched employees
+          employees.forEach((employee) => {
+            const option = document.createElement("option");
+            option.value = employee._id;
+            option.textContent = employee.FirstName + " " + employee.LastName;
+            managerSelect.appendChild(option);
+          });
+        } else {
+          const option = document.createElement("option");
+          option.textContent = "There are no employees!!";
+          option.disabled = true;
+          managerSelect.appendChild(option);
+        }
+      }
+    </script>
+  </body>
+</html>
